@@ -2,10 +2,10 @@ Mixture of my understanding, [nextjs learn](https://nextjs.org/learn) and [docs]
 
 ### Project Structure
 
-**/app** - App Router
-**/pages** - Pages Router
-**/public** - Static assets to be served
-**/src** - Optional application source folder
+**/app** - App Router  
+**/pages** - Pages Router  
+**/public** - Static assets to be served  
+**/src** - Optional application source folder  
 **/next.config.js** - configuration file
 
 ### File Conventions
