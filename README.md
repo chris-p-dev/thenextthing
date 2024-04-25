@@ -242,18 +242,10 @@ Adding these on the route segments can show or display page for Error Handling
 
 ##### Error Page
 
-Added Error page on either root or specific route segment/file structure. Could be
-.
-├── ...
-├── invoices
-│ ├── [id]
-│ ├── edit
-│ ├── not-found.tsx
-│ ├── error.tsx
-│ ├── page.tsx
-│ ├── layout.tsx
-│
-└── ...
+Added Error page on either root or specific route segment/file structure.
+
+Example:
+![alt text](error-handling-1.png)
 
 ```js
 // somewhere server action or any API handling
