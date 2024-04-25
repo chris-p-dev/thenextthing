@@ -27,6 +27,7 @@
       <div class="crossnote markdown-preview  ">
       
 <p>Mixture of my understanding, <a href="https://nextjs.org/learn">nextjs learn</a> and <a href="https://nextjs.org/docs">docs</a></p>
+<p><a href="https://github.com/chris-p-dev/thenextthing">sample project</a></p>
 <h3 id="project-structure">Project Structure </h3>
 <p><strong>/app</strong> - App Router<br>
 <strong>/pages</strong> - Pages Router<br>
@@ -67,8 +68,124 @@ ur Client or Server Components.</li>
 <h5 id="convention">Convention </h5>
 <p>use the inline function level or module level <code>"use server"</code></p>
 <h6 id="server-components">Server Components </h6>
-<p>Sample server Component<br>
-<img src="server-action-sam%60ple.png" alt="alt text">`</p>
+<p>Sample server Component</p>
+<pre data-role="codeBlock" data-info="ts" class="language-ts ts"><code><span class="token string">'use server'</span><span class="token punctuation">;</span> <span class="token comment">// this will inlive  server action</span>
+<span class="token keyword keyword-import">import</span> <span class="token punctuation">{</span> signIn <span class="token punctuation">}</span> <span class="token keyword keyword-from">from</span> <span class="token string">'@/auth'</span><span class="token punctuation">;</span>
+<span class="token keyword keyword-import">import</span> <span class="token punctuation">{</span> AuthError <span class="token punctuation">}</span> <span class="token keyword keyword-from">from</span> <span class="token string">'next-auth'</span><span class="token punctuation">;</span>
+<span class="token keyword keyword-import">import</span> <span class="token punctuation">{</span> z <span class="token punctuation">}</span> <span class="token keyword keyword-from">from</span> <span class="token string">'zod'</span><span class="token punctuation">;</span>
+<span class="token keyword keyword-import">import</span> <span class="token punctuation">{</span> sql <span class="token punctuation">}</span> <span class="token keyword keyword-from">from</span> <span class="token string">'@vercel/postgres'</span><span class="token punctuation">;</span>
+<span class="token keyword keyword-import">import</span> <span class="token punctuation">{</span> revalidatePath <span class="token punctuation">}</span> <span class="token keyword keyword-from">from</span> <span class="token string">'next/cache'</span><span class="token punctuation">;</span>
+<span class="token keyword keyword-import">import</span> <span class="token punctuation">{</span> redirect <span class="token punctuation">}</span> <span class="token keyword keyword-from">from</span> <span class="token string">'next/navigation'</span><span class="token punctuation">;</span>
+
+<span class="token comment">// typings</span>
+<span class="token keyword keyword-export">export</span> <span class="token keyword keyword-type">type</span> <span class="token class-name">State</span> <span class="token operator">=</span> <span class="token punctuation">{</span>
+  errors<span class="token operator">?</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+    customerId<span class="token operator">?</span><span class="token operator">:</span> <span class="token builtin">string</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+    amount<span class="token operator">?</span><span class="token operator">:</span> <span class="token builtin">string</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+    status<span class="token operator">?</span><span class="token operator">:</span> <span class="token builtin">string</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span><span class="token punctuation">;</span>
+  message<span class="token operator">?</span><span class="token operator">:</span> <span class="token builtin">string</span> <span class="token operator">|</span> <span class="token keyword keyword-null">null</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+<span class="token comment">// form validation like zod</span>
+<span class="token keyword keyword-const">const</span> FormSchema <span class="token operator">=</span> z<span class="token punctuation">.</span><span class="token function">object</span><span class="token punctuation">(</span><span class="token punctuation">{</span>
+  id<span class="token operator">:</span> z<span class="token punctuation">.</span><span class="token function">string</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+  customerId<span class="token operator">:</span> z<span class="token punctuation">.</span><span class="token function">string</span><span class="token punctuation">(</span><span class="token punctuation">{</span>
+    invalid_type_error<span class="token operator">:</span> <span class="token string">'Please select a customer.'</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+  amount<span class="token operator">:</span> z<span class="token punctuation">.</span>coerce
+    <span class="token punctuation">.</span><span class="token function">number</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+    <span class="token punctuation">.</span><span class="token function">gt</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token punctuation">{</span> message<span class="token operator">:</span> <span class="token string">'Please enter an amount greater than $0.'</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+  status<span class="token operator">:</span> z<span class="token punctuation">.</span><span class="token function">enum</span><span class="token punctuation">(</span><span class="token punctuation">[</span><span class="token string">'pending'</span><span class="token punctuation">,</span> <span class="token string">'paid'</span><span class="token punctuation">]</span><span class="token punctuation">,</span> <span class="token punctuation">{</span>
+    invalid_type_error<span class="token operator">:</span> <span class="token string">'Please select an invoice status.'</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+  date<span class="token operator">:</span> z<span class="token punctuation">.</span><span class="token function">string</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// Use Zod to update the expected types</span>
+<span class="token keyword keyword-const">const</span> UpdateInvoice <span class="token operator">=</span> FormSchema<span class="token punctuation">.</span><span class="token function">omit</span><span class="token punctuation">(</span><span class="token punctuation">{</span> id<span class="token operator">:</span> <span class="token boolean">true</span><span class="token punctuation">,</span> date<span class="token operator">:</span> <span class="token boolean">true</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// action to invoke</span>
+<span class="token keyword keyword-export">export</span> <span class="token keyword keyword-async">async</span> <span class="token keyword keyword-function">function</span> <span class="token function">updateInvoice</span><span class="token punctuation">(</span>
+  id<span class="token operator">:</span> <span class="token builtin">string</span><span class="token punctuation">,</span>
+  prevState<span class="token operator">:</span> State<span class="token punctuation">,</span>
+  formData<span class="token operator">:</span> FormData<span class="token punctuation">,</span>
+<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword keyword-const">const</span> validatedFields <span class="token operator">=</span> UpdateInvoice<span class="token punctuation">.</span><span class="token function">safeParse</span><span class="token punctuation">(</span><span class="token punctuation">{</span>
+    customerId<span class="token operator">:</span> formData<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span><span class="token string">'customerId'</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+    amount<span class="token operator">:</span> formData<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span><span class="token string">'amount'</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+    status<span class="token operator">:</span> formData<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span><span class="token string">'status'</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+  <span class="token keyword keyword-if">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>validatedFields<span class="token punctuation">.</span>success<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword keyword-return">return</span> <span class="token punctuation">{</span>
+      errors<span class="token operator">:</span> validatedFields<span class="token punctuation">.</span>error<span class="token punctuation">.</span><span class="token function">flatten</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span>fieldErrors<span class="token punctuation">,</span>
+      message<span class="token operator">:</span> <span class="token string">'Missing Fields. Failed to Update Invoice.'</span><span class="token punctuation">,</span>
+    <span class="token punctuation">}</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span>
+
+  <span class="token keyword keyword-const">const</span> <span class="token punctuation">{</span> customerId<span class="token punctuation">,</span> amount<span class="token punctuation">,</span> status <span class="token punctuation">}</span> <span class="token operator">=</span> validatedFields<span class="token punctuation">.</span>data<span class="token punctuation">;</span>
+  <span class="token keyword keyword-const">const</span> amountInCents <span class="token operator">=</span> amount <span class="token operator">*</span> <span class="token number">100</span><span class="token punctuation">;</span>
+  <span class="token comment">// some transaction</span>
+  <span class="token keyword keyword-try">try</span> <span class="token punctuation">{</span>
+    <span class="token keyword keyword-await">await</span> sql<span class="token template-string"><span class="token template-punctuation string">`</span><span class="token string">
+      UPDATE invoices
+      SET customer_id = </span><span class="token interpolation"><span class="token interpolation-punctuation punctuation">${</span>customerId<span class="token interpolation-punctuation punctuation">}</span></span><span class="token string">, amount = </span><span class="token interpolation"><span class="token interpolation-punctuation punctuation">${</span>amountInCents<span class="token interpolation-punctuation punctuation">}</span></span><span class="token string">, status = </span><span class="token interpolation"><span class="token interpolation-punctuation punctuation">${</span>status<span class="token interpolation-punctuation punctuation">}</span></span><span class="token string">
+      WHERE id = </span><span class="token interpolation"><span class="token interpolation-punctuation punctuation">${</span>id<span class="token interpolation-punctuation punctuation">}</span></span><span class="token string">
+    </span><span class="token template-punctuation string">`</span></span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span> <span class="token keyword keyword-catch">catch</span> <span class="token punctuation">(</span>error<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword keyword-return">return</span> <span class="token punctuation">{</span> message<span class="token operator">:</span> <span class="token string">'Database Error: Failed to Update Invoice.'</span> <span class="token punctuation">}</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span>
+
+  <span class="token function">revalidatePath</span><span class="token punctuation">(</span><span class="token string">'/dashboard/invoices'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token function">redirect</span><span class="token punctuation">(</span><span class="token string">'/dashboard/invoices'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">// revalidatePath -  allows you to purge cached data on-demand for a specific path.</span>
+<span class="token comment">// redirect - function allows you to redirect the user to another URL.</span>
+</code></pre><h3 id="client-components">Client Components </h3>
+<p>Client Components allow you to write interactive UI that is prerendered on the server and can use client JavaScript to run in the browser.</p>
+<p>Benefits:</p>
+<ul>
+<li>Interactivity: Client Components can use state, effects, and event listeners, meaning they can provide immediate feedback to the user and update the UI.</li>
+<li>Browser APIs: Client Components have access to browser APIs, like geolocation or localStorage.</li>
+</ul>
+<p>Sample code</p>
+<pre data-role="codeBlock" data-info="ts" class="language-ts ts"><code><span class="token string">'use client'</span><span class="token punctuation">;</span> <span class="token comment">// add "use client directive on the top of the file"</span>
+<span class="token comment">// This means that by defining a "use client" in a file, all other modules imported into it, including child components, are considered part of the client bundle.</span>
+
+
+<span class="token keyword keyword-import">import</span> <span class="token punctuation">{</span> useEffect <span class="token punctuation">}</span> <span class="token keyword keyword-from">from</span> <span class="token string">'react'</span><span class="token punctuation">;</span>
+
+<span class="token keyword keyword-export">export</span> <span class="token keyword keyword-default">default</span> <span class="token keyword keyword-function">function</span> <span class="token function">Error</span><span class="token punctuation">(</span><span class="token punctuation">{</span>
+  error<span class="token punctuation">,</span>
+  reset<span class="token punctuation">,</span>
+<span class="token punctuation">}</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+  error<span class="token operator">:</span> Error <span class="token operator">&amp;</span> <span class="token punctuation">{</span> digest<span class="token operator">?</span><span class="token operator">:</span> <span class="token builtin">string</span> <span class="token punctuation">}</span><span class="token punctuation">;</span>
+  <span class="token function-variable function">reset</span><span class="token operator">:</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token keyword keyword-void">void</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token function">useEffect</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+    <span class="token comment">// Optionally log the error to an error reporting service</span>
+    <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span>error<span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">[</span>error<span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+  <span class="token keyword keyword-return">return</span> <span class="token punctuation">(</span>
+    <span class="token operator">&lt;</span>main className<span class="token operator">=</span><span class="token string">"flex h-full flex-col items-center justify-center"</span><span class="token operator">&gt;</span>
+      <span class="token operator">&lt;</span>h2 className<span class="token operator">=</span><span class="token string">"text-center"</span><span class="token operator">&gt;</span>Something went wrong<span class="token operator">!</span><span class="token operator">&lt;</span><span class="token operator">/</span>h2<span class="token operator">&gt;</span>
+      <span class="token operator">&lt;</span>button
+        className<span class="token operator">=</span><span class="token string">"mt-4 rounded-md bg-blue-500 px-4 py-2 text-sm text-white transition-colors hover:bg-blue-400"</span>
+        onClick<span class="token operator">=</span><span class="token punctuation">{</span>
+          <span class="token comment">// Attempt to recover by trying to re-render the invoices route</span>
+          <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token function">reset</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+        <span class="token punctuation">}</span>
+      <span class="token operator">&gt;</span>
+        Try again
+      <span class="token operator">&lt;</span><span class="token operator">/</span>button<span class="token operator">&gt;</span>
+    <span class="token operator">&lt;</span><span class="token operator">/</span>main<span class="token operator">&gt;</span>
+  <span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre><p>Diagram when not using "use client" and making component be interactive<br>
+<img src="image-3.png" alt="alt text"></p>
 <h3 id="partial-prerendering">Partial Prerendering </h3>
 <p>serves a static page with dynamic holes for fast page initial load</p>
 <ul>
@@ -78,9 +195,9 @@ ur Client or Server Components.</li>
 </ul>
 <p>To enable this:</p>
 <pre data-role="codeBlock" data-info="ts #16" class="language-ts ts"><code><span class="token comment">// next.config.js</span>
-    experimental<span class="token operator">:</span> <span class="token punctuation">{</span>
-         ppr<span class="token operator">:</span> <span class="token boolean">true</span><span class="token punctuation">,</span>
-    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+experimental<span class="token operator">:</span> <span class="token punctuation">{</span>
+        ppr<span class="token operator">:</span> <span class="token boolean">true</span><span class="token punctuation">,</span>
+<span class="token punctuation">}</span><span class="token punctuation">,</span>
 </code></pre><p>Make use of Suspense <code>&lt;Suspense&gt;</code></p>
 <pre data-role="codeBlock" data-info="ts" class="language-ts ts"><code><span class="token comment">// some component with dynamic content</span>
  <span class="token keyword keyword-return">return</span> <span class="token punctuation">(</span>
@@ -104,18 +221,9 @@ ur Client or Server Components.</li>
 </code></pre><h3 id="error-handling">Error Handling </h3>
 <p>Adding these on the route segments can show or display page for Error Handling</p>
 <h5 id="error-page">Error Page </h5>
-<p>Added Error page on either root or specific route segment/file structure. Could be<br>
-.<br>
-├── ...<br>
-├── invoices<br>
-│ ├── [id]<br>
-│ ├── edit<br>
-│ ├── not-found.tsx<br>
-│ ├── error.tsx<br>
-│ ├── page.tsx<br>
-│ ├── layout.tsx<br>
-│<br>
-└── ...</p>
+<p>Added Error page on either root or specific route segment/file structure.</p>
+<p>Example:</p>
+<p><img src="error-handling-1.png" alt="alt text"></p>
 <pre data-role="codeBlock" data-info="js" class="language-javascript js"><code><span class="token comment">// somewhere server action or any API handling</span>
 <span class="token spread operator">...</span><span class="token punctuation">.</span>
 <span class="token keyword module keyword-export">export</span> <span class="token keyword keyword-async">async</span> <span class="token keyword keyword-function">function</span> <span class="token function">deleteInvoice</span><span class="token punctuation">(</span><span class="token parameter"><span class="token literal-property property">id</span><span class="token operator">:</span> string</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
