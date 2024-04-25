@@ -244,7 +244,8 @@ Adding these on the route segments can show or display page for Error Handling
 
 Added Error page on either root or specific route segment/file structure.
 
-Example:
+Example:  
+
 ![alt text](error-handling-1.png)
 
 ```js
